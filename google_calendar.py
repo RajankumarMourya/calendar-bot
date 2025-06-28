@@ -37,7 +37,8 @@ def get_calendar_service():
                 temp.write(credentials_json.encode())
                 temp.flush()
                 flow = InstalledAppFlow.from_client_secrets_file(temp.name, SCOPES)
-                creds = flow.run_local_server(port=0)
+                creds = flow.run_console()
+
 
         # Save token for reuse
         with open(TOKEN_PATH, 'w') as token_file:
