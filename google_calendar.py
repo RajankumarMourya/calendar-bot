@@ -3,6 +3,7 @@ import json
 import tempfile
 from datetime import datetime
 import pytz
+import base64
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -12,41 +13,44 @@ from googleapiclient.discovery import build
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 TOKEN_PATH = 'token.json'
 
+
 def get_calendar_service():
     creds = None
 
-    # 1. Try loading from cached token
+    # Step 1: Try loading cached token
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
-    # 2. If no valid credentials, use OAuth flow
+    # Step 2: If not valid, decode creds and run OAuth flow
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             print("🔄 Refreshing expired token...")
             creds.refresh(Request())
         else:
-            print("🔐 Launching Google OAuth login...")
+            print("🔐 Using base64 GOOGLE_CREDENTIALS_B64 env var...")
 
-            # Load credentials from environment variable
-            credentials_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-            if not credentials_json:
-                raise RuntimeError("Missing GOOGLE_CREDENTIALS_JSON env variable.")
+            # Read base64-encoded client secret
+            b64_credentials = os.environ.get("GOOGLE_CREDENTIALS_B64")
+            if not b64_credentials:
+                raise RuntimeError("❌ Missing GOOGLE_CREDENTIALS_B64 environment variable.")
 
-            # Save to a temp file for OAuth
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp:
-                temp.write(credentials_json.encode())
+            decoded_json = base64.b64decode(b64_credentials).decode("utf-8")
+
+            # Save decoded credentials to a temp file
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp:
+                temp.write(decoded_json)
                 temp.flush()
                 flow = InstalledAppFlow.from_client_secrets_file(temp.name, SCOPES)
-                creds = flow.run_console()
+                # You CANNOT use flow.run_local_server or run_console on Render
+                raise RuntimeError("❌ Cannot launch OAuth in headless environment. Use a pre-generated token.json instead.")
 
-
-        # Save token for reuse
+        # Save the fresh token locally
         with open(TOKEN_PATH, 'w') as token_file:
             token_file.write(creds.to_json())
 
     return build('calendar', 'v3', credentials=creds)
 
-# Check if time slot is available
+
 def is_time_slot_available(date: str, start_hour: int, end_hour: int) -> bool:
     service = get_calendar_service()
     ist = pytz.timezone("Asia/Kolkata")
@@ -66,7 +70,7 @@ def is_time_slot_available(date: str, start_hour: int, end_hour: int) -> bool:
     print(f"🕵️ Found {len(events)} event(s) between {start_hour}-{end_hour} on {date}.")
     return len(events) == 0
 
-# Book the meeting
+
 def book_meeting(date: str, start_hour: int, end_hour: int, summary: str) -> bool:
     service = get_calendar_service()
     ist = pytz.timezone("Asia/Kolkata")
