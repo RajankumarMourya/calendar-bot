@@ -17,36 +17,24 @@ TOKEN_PATH = 'token.json'
 def get_calendar_service():
     creds = None
 
-    # Step 1: Try loading cached token
+    # Step 1: Try loading token.json if running locally
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
-    # Step 2: If not valid, decode creds and run OAuth flow
+    # Step 2: If not valid or not running locally, try env var GOOGLE_TOKEN_B64
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            print("🔄 Refreshing expired token...")
-            creds.refresh(Request())
-        else:
-            print("🔐 Using base64 GOOGLE_CREDENTIALS_B64 env var...")
+        b64_token = os.environ.get("GOOGLE_TOKEN_B64")
+        if not b64_token:
+            raise RuntimeError("❌ Missing GOOGLE_TOKEN_B64 environment variable.")
 
-            # Read base64-encoded client secret
-            b64_credentials = os.environ.get("GOOGLE_CREDENTIALS_B64")
-            if not b64_credentials:
-                raise RuntimeError("❌ Missing GOOGLE_CREDENTIALS_B64 environment variable.")
-
-            decoded_json = base64.b64decode(b64_credentials).decode("utf-8")
-
-            # Save decoded credentials to a temp file
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp:
-                temp.write(decoded_json)
-                temp.flush()
-                flow = InstalledAppFlow.from_client_secrets_file(temp.name, SCOPES)
-                # You CANNOT use flow.run_local_server or run_console on Render
-                raise RuntimeError("❌ Cannot launch OAuth in headless environment. Use a pre-generated token.json instead.")
-
-        # Save the fresh token locally
-        with open(TOKEN_PATH, 'w') as token_file:
-            token_file.write(creds.to_json())
+        try:
+            token_data = base64.b64decode(b64_token).decode("utf-8")
+            with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".json") as tmp:
+                tmp.write(token_data)
+                tmp.flush()
+                creds = Credentials.from_authorized_user_file(tmp.name, SCOPES)
+        except Exception as e:
+            raise RuntimeError(f"❌ Failed to load credentials from GOOGLE_TOKEN_B64: {e}")
 
     return build('calendar', 'v3', credentials=creds)
 
