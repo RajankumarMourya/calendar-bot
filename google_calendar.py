@@ -4,6 +4,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from datetime import datetime
+import pytz
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 TOKEN_PATH = 'token.json'
@@ -37,20 +39,22 @@ def get_calendar_service():
 def is_time_slot_available(date: str, start_hour: int, end_hour: int) -> bool:
     service = get_calendar_service()
 
-    start_time = datetime.strptime(f"{date} {start_hour}", "%Y-%m-%d %H")
-    end_time = datetime.strptime(f"{date} {end_hour}", "%Y-%m-%d %H")
+    ist = pytz.timezone("Asia/Kolkata")
+    start_time = ist.localize(datetime.strptime(f"{date} {start_hour}", "%Y-%m-%d %H"))
+    end_time = ist.localize(datetime.strptime(f"{date} {end_hour}", "%Y-%m-%d %H"))
 
     events_result = service.events().list(
         calendarId='primary',
-        timeMin=start_time.isoformat() + 'Z',
-        timeMax=end_time.isoformat() + 'Z',
+        timeMin=start_time.isoformat(),
+        timeMax=end_time.isoformat(),
         singleEvents=True,
         orderBy='startTime'
     ).execute()
 
     events = events_result.get('items', [])
-    print(f"🕵️ Found {len(events)} conflicting event(s) between {start_hour}-{end_hour} on {date}.")
+    print(f"🕵️ Found {len(events)} event(s) from {start_time} to {end_time}")
     return len(events) == 0
+
 
 
 def book_meeting(date: str, start_hour: int, end_hour: int, summary: str) -> bool:
