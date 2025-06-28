@@ -81,7 +81,7 @@ def extract_datetime_node(state: AgentState) -> AgentState:
     return state
 
 # ---------- 4. Node: Calendar API via FastAPI ----------
-API_BASE = "http://localhost:8000"  # Replace with deployed URL if hosted
+API_BASE = "https://calendar-bot-ys0s.onrender.com"  # Replace with deployed URL if hosted
 
 def check_availability_node(state: AgentState) -> AgentState:
     try:
